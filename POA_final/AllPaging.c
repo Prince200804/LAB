@@ -1,183 +1,179 @@
 #include <stdio.h>
-#include <stdbool.h>
 #include <limits.h>
 
-double totalBlockSize = 0;
-
-void firstFit(int blocks[], int processes[], int num_blocks, int num_processes);
-void nextFit(int blocks[], int processes[], int num_blocks, int num_processes);
-void bestFit(int blocks[], int processes[], int num_blocks, int num_processes);
-void worstFit(int blocks[], int processes[], int num_blocks, int num_processes);
-
+void fifo(int pages[], int frames[], int num_pages, int num_frames);
+int isMissOrHit(int page, int frames[], int num_frames);
+void lru(int pages[], int frames[], int num_pages, int num_frames);
+void optimal(int pages[], int frames[], int num_pages, int num_frames);
+int maxDist_LRU(int pages[], int frames[], int num_frames, int start, int end);
+int maxDist_Optimal(int pages[], int frames[], int num_frames, int start, int end);
 
 void main(){
-    int blocks[] = {100, 500, 200, 300, 600};
-    int processes[] = {200, 400, 110, 420, 80};
-    int num_blocks = sizeof(blocks)/sizeof(blocks[0]);
-    int num_processes = sizeof(processes)/sizeof(processes[0]);
-    int input, i, j;
-    int a[num_blocks], b[num_processes];
-
-    for(i=0; i<num_blocks; i++){
-        totalBlockSize += blocks[i];
+    int num_frames = 4;
+    int frames[num_frames];
+    int i;
+    for(i=0; i<num_frames; i++){
+        frames[i] = -1;
     }
+    int pages[] = {7,0,1,2,0,3,0,4,2,3,0,3,2,1,2,0,1,7,0,1};
+    int num_pages = sizeof(pages)/sizeof(pages[0]);
 
-    printf("Enter 1 for First Fit \nEnter 2 for Next Fit \nEnter 3 for Best Fit \nEnter 4 for Worst Fit \nEnter 0 to quit\n");
-    
-    while(true){
-        printf("\nEnter: ");
-        scanf("%d", &input);
-        for(i=0; i<num_blocks; i++){
-            a[i] = blocks[i];
-        }
-        for(i=0; i<num_blocks; i++){
-            b[i] = processes[i];
-        }
-        if(input == 0){
-            break;
-        }else if(input == 1){
-            printf("First Fit: \n");
-            printf("Process No.\t Process Size\t Block No.\n");
-            firstFit(a, b, num_blocks, num_processes);
-        }else if(input == 2){
-            printf("Next Fit: \n");
-            printf("Process No.\t Process Size\t Block No.\n");
-            nextFit(a, b, num_blocks, num_processes);
-        }else if(input == 3){
-            printf("Best Fit: \n");
-            printf("Process No.\t Process Size\t Block No.\n");
-            bestFit(a, b, num_blocks, num_processes);
-        }else if(input == 4){
-            printf("Worst Fit: \n");
-            printf("Process No.\t Process Size\t Block No.\n");
-            worstFit(a, b, num_blocks, num_processes);
-        }
-    }
-
+    //optimal(pages, frames, num_pages, num_frames);
+    fifo(pages, frames, num_pages, num_frames);
+    // lru(pages, frames, num_pages, num_frames);
 }
 
-void bestFit(int blocks[], int processes[], int num_blocks, int num_processes){
-    int i,j,a,min, min_index; 
-    double totalProcessesSize = 0;
-    for(i=0; i<num_processes; i++){
-        min = INT_MAX;
-        min_index = -1;
-        for(j=0; j<num_blocks; j++){
-            if(blocks[j] >= processes[i]){
-                a = blocks[j] - processes[i];
-                if(min > a){
-                    min = a;
-                    min_index = j;
-                }
-            }
-        }
-
-        if(min_index == -1){
-            printf("%d\t %d\t Not Allocated\n", i+1, processes[i]);
-        }else{
-            printf("%d\t\t %d\t\t %d\n", i+1, processes[i], min_index+1);
-            blocks[min_index] -= processes[i];
-            totalProcessesSize += processes[i];
-        }
-        
-    }
-    printf("\nRemaining Space: ");
-    for(i=0; i<num_blocks; i++){
-        printf("%d ", blocks[i]);
-    }
-    printf("\n");
-    printf("Memory Utilisation: %.2f\n", ((totalProcessesSize/totalBlockSize) * 100));
-}
-
-void worstFit(int blocks[], int processes[], int num_blocks, int num_processes){
-    int i,j,a,max, max_index;
-    double totalProcessesSize = 0;
-    for(i=0; i<num_processes; i++){
-        max = INT_MIN;
-        max_index = -1;
-        for(j=0; j<num_blocks; j++){
-            if(blocks[j] >= processes[i]){
-                a = blocks[j] - processes[i];
-                if(max < a){
-                    max = a;
-                    max_index = j;
-                }
-            }
-        }
-
-        if(max_index == -1){
-            printf("%d\t\t %d\t\t Not Allocated\n", i+1, processes[i]);
-        }else{
-            printf("%d\t\t %d\t\t %d\n", i+1, processes[i], max_index+1);
-            blocks[max_index] -= processes[i];\
-            totalProcessesSize += processes[i];
-        }
-        
-    }
-    printf("\nRemaining Space: ");
-    for(i=0; i<num_blocks; i++){
-        printf("%d ", blocks[i]);
-    }
-    printf("\n");
-    printf("Memory Utilisation: %.2f\n", ((totalProcessesSize/totalBlockSize) * 100));
-}
-
-void firstFit(int blocks[], int processes[], int num_blocks, int num_processes){
-    int i,j,f; 
-    double totalProcessesSize = 0;
-    for(i=0; i<num_processes; i++){
+void fifo(int pages[], int frames[], int num_pages, int num_frames){
+    int i,j,curr_frame=0, f=0;
+    double miss=0, hit=0;
+    for(i=0; i<num_pages; i++){
         f=0;
-        for(j=0; j<num_blocks; j++){
-            if(blocks[j] > processes[i]){
-                blocks[j] -= processes[i];
-                totalProcessesSize += processes[i];
-                printf("%d\t\t %d\t\t %d\n", i+1, processes[i], j+1);
+        for(j=curr_frame; j<num_frames; j++){
+            if(frames[j] == -1){
+                frames[j] = pages[i];
                 f=1;
+                miss++;
                 break;
             }
         }
+
         if(f==0){
-            printf("%d\t\t %d\t\t Not Allocated\n", i+1, processes[i]);
+            if(isMissOrHit(pages[i], frames, num_frames) == 0){
+                frames[curr_frame] = pages[i];
+                curr_frame = (curr_frame+1)%num_frames;
+                miss++;
+            }else{
+                hit++;
+            }
+            
         }
+
+        printf("Input %d: ", pages[i]);
+        for(j=0; j<num_frames; j++){
+            printf("%d\t", frames[j]);
+        }
+        printf("\n");
+
     }
-    printf("\nRemaining Space: ");
-    for(i=0; i<num_blocks; i++){
-        printf("%d ", blocks[i]);
-    }
-    printf("\n");
-    printf("Memory Utilisation: %.2f\n", ((totalProcessesSize/totalBlockSize) * 100));
+    printf("Miss: %.0f\t Hit: %.0f\t Hit ratio: %.2f\n", miss, hit, hit/miss);
 }
 
-void nextFit(int blocks[], int processes[], int num_blocks, int num_processes){
-    int i,j,f,index, count;
-    double totalProcessesSize = 0;
-    index = 0;
-    for(i=0; i<num_processes; i++){
+int isMissOrHit(int page, int frames[], int num_frames){
+    int i,f=0;
+    for(i=0; i<num_frames; i++){
+        if(page == frames[i]){
+            f=1;
+            break;
+        }
+    }
+    return f;
+}
+
+void lru(int pages[], int frames[], int num_pages, int num_frames){
+    int i,j,f, index;
+    double miss=0, hit=0;
+    for(i=0; i<num_pages; i++){
         f=0;
-        count = 0;
-        for(j=index; j<num_blocks; j=(j+1)%num_blocks){
-            if(count == num_blocks){
+        for(j=0; j<num_frames; j++){
+            if(frames[j] == -1){
+                frames[j] = pages[i];
+                f=1;
+                miss++;
                 break;
             }
-            if(blocks[j] > processes[i]){
-                blocks[j] -= processes[i];
-                totalProcessesSize += processes[i];
-                printf("%d\t\t %d\t\t %d\n", i+1, processes[i], j+1);
+        }
+
+        if(f==0){
+            if(isMissOrHit(pages[i], frames, num_frames) == 0){
+                index = maxDist_LRU(pages, frames, num_frames, 0, i);
+                frames[index] = pages[i];
+                miss++;
+            }else{
+                hit++;
+            }
+        }
+
+        printf("Input %d: ", pages[i]);
+        for(j=0; j<num_frames; j++){
+            printf("%d\t", frames[j]);
+        }
+        printf("\n");
+    }
+    printf("Miss: %.0f\t Hit: %.0f\t Hit ratio: %.2f\n", miss, hit, hit/miss);
+}
+
+void optimal(int pages[], int frames[], int num_pages, int num_frames){
+    int i,j,f,index;
+    double miss=0,hit=0;
+    for(i=0; i<num_pages; i++){
+        f=0;
+        for(j=0; j<num_frames; j++){
+            if(frames[j] == -1){
+                frames[j] = pages[i];
+                f=1;
+                miss++;
+                break;
+            }
+        }
+
+        if(f==0){
+            if(isMissOrHit(pages[i], frames, num_frames) == 0){
+                index = maxDist_Optimal(pages, frames, num_frames, i, num_pages);
+                frames[index] = pages[i];
+                miss++;
+            }else{
+                hit++;
+            }
+        }
+
+        printf("Input %d: ", pages[i]);
+        for(j=0; j<num_frames; j++){
+            printf("%d\t", frames[j]);
+        }
+        printf("\n");
+    }
+    printf("Miss: %.0f\t Hit: %.0f\t Hit ratio: %.2f\n", miss, hit, hit/miss);
+}
+
+int maxDist_LRU(int pages[], int frames[], int num_frames, int start, int end){
+    int i,j,f,min_index = INT_MAX, frame_index, index;
+    for(i=0; i<num_frames; i++){
+
+        for(j=start; j<=end; j++){
+            if(frames[i] == pages[j]){
+                index = j;
+            }
+        }
+        if(min_index > index){
+            min_index = index;
+            frame_index = i;
+        }
+    }
+    return frame_index;
+}
+
+int maxDist_Optimal(int pages[], int frames[], int num_frames, int start, int end){
+    int i,j,f, max_index = INT_MIN, frame_index, index;
+    for(i=0; i<num_frames; i++){
+        f=0;
+        for(j=start; j<end; j++){
+            if(frames[i] == pages[j]){
                 index = j;
                 f=1;
                 break;
             }
-            count++;
         }
-        if(f==0){
-            printf("%d\t\t %d\t\t Not Allocated\n", i+1, processes[i]);
-        }
-    }
-    printf("\nRemaining Space: ");
-    for(i=0; i<num_blocks; i++){
-        printf("%d ", blocks[i]);
-    }
-    printf("\n");
-    printf("Memory Utilisation: %.2f\n", ((totalProcessesSize/totalBlockSize) * 100));
-}
 
+        if(f==0){
+            max_index = INT_MAX;
+            frame_index = i;
+            break;
+        }
+
+        if(max_index < index){
+            max_index = index;
+            frame_index = i;
+        }
+    }
+    return frame_index;
+}
